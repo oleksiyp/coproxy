@@ -14,7 +14,7 @@ class ProxyServerHandler(
     private val handler: CoProxyHandler
 ) : SimpleChannelInboundHandler<HttpObject>() {
 
-    override fun channelInactive(ctx: ChannelHandlerContext) {
+    override fun channelUnregistered(ctx: ChannelHandlerContext) {
         val reqResponse = ctx.requestResponseNullable ?: return
         ctx.requestResponseNullable = null
         launch(reqResponse.dispatcher) {

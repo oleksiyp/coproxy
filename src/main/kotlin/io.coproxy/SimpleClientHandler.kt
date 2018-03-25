@@ -8,20 +8,30 @@ import io.netty.handler.timeout.IdleStateEvent
 import io.netty.util.AttributeKey
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.Promise
+import org.slf4j.LoggerFactory
 
 class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
         ReferenceCountUtil.retain(msg)
-        ctx.channel().responsePromise.setSuccess(msg)
+        val responsePromise = ctx.channel().responsePromise
+        ctx.channel().responsePromiseNullable = null
+        responsePromise.setSuccess(msg)
     }
 
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        ctx.channel().responsePromise.setFailure(cause)
+        val promise = ctx.channel().responsePromiseNullable
+        if (promise != null) {
+            promise.setFailure(cause)
+        } else {
+            log.error("Simple client error. No promise attached. Just logging", cause)
+        }
     }
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         if (evt is IdleStateEvent) {
-            throw TimeoutException("Channel idle more than timeout")
+            if (ctx.channel().responsePromiseNullable != null) {
+                throw TimeoutException("Channel idle more than timeout")
+            }
         }
         super.userEventTriggered(ctx, evt)
     }
@@ -37,5 +47,10 @@ class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
                     ?: throw RuntimeException("bad state")
             set(value) = attr(attributeKey).set(value)
 
+        var Channel.responsePromiseNullable: Promise<FullHttpResponse>?
+            get () = attr(attributeKey).get()
+            set(value) = attr(attributeKey).set(value)
+
+        val log = LoggerFactory.getLogger(SimpleClientHandler::class.java)
     }
 }

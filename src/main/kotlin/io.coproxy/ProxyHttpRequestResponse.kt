@@ -8,9 +8,7 @@ import io.netty.channel.pool.ChannelPool
 import io.netty.channel.pool.ChannelPoolMap
 import io.netty.handler.codec.http.*
 import io.netty.util.AttributeKey
-import kotlinx.coroutines.experimental.Job
-import kotlinx.coroutines.experimental.asCoroutineDispatcher
-import kotlinx.coroutines.experimental.launch
+import kotlinx.coroutines.experimental.*
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.util.*
@@ -28,8 +26,8 @@ class ProxyHttpRequestResponse(
     private var requestStarted = false
     private var requestSent = false
 
-    private var responseStarted = false
-    private var responseSent = false
+    var responseStarted = false
+    var responseSent = false
 
     val dispatcher = server.eventLoop().asCoroutineDispatcher()
 
@@ -104,10 +102,13 @@ class ProxyHttpRequestResponse(
         handler: CoProxyHandler
     ) {
         flowControl()
-        handlerJob = launch(dispatcher) {
+        val ctx = dispatcher + CoroutineName("coProxyHandler")
+        handlerJob = launch(ctx) {
             try {
                 val context = ProxyContextImpl(request, poolMap)
                 context.handler()
+            } catch (ex: JobCancellationException) {
+                log.info("Job request/response handler job cancelled")
             } catch (ex: Throwable) {
                 server.write(ex)
             }
@@ -120,8 +121,15 @@ class ProxyHttpRequestResponse(
     }
 
 
-    private suspend fun finish(closeClient: Boolean = false) {
+    suspend fun finish(closeClient: Boolean = false) {
         finishOk = responseSent && requestSent
+        if (!finishOk) {
+            handlerJob?.cancel()
+            handlerJob?.join()
+        }
+        if (!responseSent) {
+
+        }
 
         val handler = clientHandler
         clientHandler = null
@@ -139,7 +147,8 @@ class ProxyHttpRequestResponse(
 
     fun finishIfSent() {
         if (responseSent && requestSent) {
-            launch {
+            val ctx = dispatcher + CoroutineName("finishJob")
+            launch(ctx) {
                 finish()
             }
         }
@@ -152,14 +161,16 @@ class ProxyHttpRequestResponse(
     override fun notifyRequestSent() {
         requestSent = true
         if (responseSent && requestSent) {
-            launch(dispatcher) {
+            val ctx = dispatcher + CoroutineName("finishJob")
+            launch(ctx) {
                 finish()
             }
         }
     }
 
     fun clientExceptionHappened(cause: Throwable) {
-        launch(dispatcher) {
+        val ctx = dispatcher + CoroutineName("clientExceptionJob")
+        launch(ctx) {
             if (responseStarted) {
                 log.error("Client-side channel error. Response sent. Closing connections", cause)
                 closeServer()
@@ -168,32 +179,11 @@ class ProxyHttpRequestResponse(
 
             log.error("Client-side channel error. Sending error response", cause)
 
-            val buffer = alloc.buffer()
-            buffer.writeCharSequence(cause.message, ProxyServerHandler.utf8)
-
-            val code = when (cause) {
-                is TimeoutException -> HttpResponseStatus.GATEWAY_TIMEOUT
-                else -> HttpResponseStatus.INTERNAL_SERVER_ERROR
-            }
-
-            val response = DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1,
-                code,
-                buffer
-            )
-
-            response.headers().set(
-                HttpHeaderNames.CONTENT_LENGTH,
-                buffer.writerIndex() - buffer.readerIndex()
-            )
-            response.headers().set(
-                HttpHeaderNames.CONTENT_TYPE,
-                "text/plain; charset=utf-8"
-            )
-
-            sendServer(response)
+            val response = errorResponse(cause)
+            sendServer(response).wait()
             flushServer()
 
+            // try recover from error without closing connections
             val fakeRequest =
                 if (requestStarted)
                     null
@@ -212,11 +202,47 @@ class ProxyHttpRequestResponse(
     }
 
     fun serverExceptionHappened(cause: Throwable) {
-        log.error("Server-side channel error. Closing connections", cause)
-        launch {
+        val ctx = dispatcher + CoroutineName("serverExceptionJob")
+        launch(ctx) {
+            if (responseStarted) {
+                log.error("Server-side channel error. Response sent. Closing connections", cause)
+                closeServer()
+                return@launch
+            }
+
+            log.error("Server-side channel error. Sending error response", cause)
+            val response = errorResponse(cause)
+            sendServer(response).wait()
             closeServer()
         }
     }
+
+    private fun errorResponse(cause: Throwable): DefaultFullHttpResponse {
+        val buffer = alloc.buffer()
+        buffer.writeCharSequence(cause.message, ProxyServerHandler.utf8)
+
+        val code = when (cause) {
+            is TimeoutException -> HttpResponseStatus.GATEWAY_TIMEOUT
+            else -> HttpResponseStatus.INTERNAL_SERVER_ERROR
+        }
+
+        val response = DefaultFullHttpResponse(
+            HttpVersion.HTTP_1_1,
+            code,
+            buffer
+        )
+
+        response.headers().set(
+            HttpHeaderNames.CONTENT_LENGTH,
+            buffer.writerIndex() - buffer.readerIndex()
+        )
+        response.headers().set(
+            HttpHeaderNames.CONTENT_TYPE,
+            "text/plain; charset=utf-8"
+        )
+        return response
+    }
+
 
     suspend fun closeServer() {
         finish(true)

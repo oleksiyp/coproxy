@@ -32,7 +32,9 @@ class CoProxy(
 
     fun stop() {
         serverGroup.shutdownGracefully()
+            .sync()
         serverWorkerGroup.shutdownGracefully()
+            .sync()
     }
 
     private fun configureClientSSL(): SslContext {

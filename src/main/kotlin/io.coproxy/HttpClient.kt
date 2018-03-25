@@ -57,7 +57,7 @@ class HttpClient(
         val attributeKey = AttributeKey.newInstance<HttpClient>("client")
         val sslKeyAttribute =
             AttributeKey.newInstance<SslContext>("clientSslContext")
-        val log = LoggerFactory.getLogger(HttpClientAttributeInitializer::class.java)
+        val log = LoggerFactory.getLogger(HttpClient::class.java)
     }
 
 }

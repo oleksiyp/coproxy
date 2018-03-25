@@ -19,6 +19,7 @@ class HttpClientAttributeInitializer(
         val eventLoop = channel.eventLoop()
         val client = synchronized(clients) { getOrCreateClient(eventLoop) }
         channel.attr(HttpClient.attributeKey).set(client)
+        super.channelRegistered(ctx)
     }
 
     private fun getOrCreateClient(eventLoop: EventLoop): HttpClient? {
@@ -33,6 +34,7 @@ class HttpClientAttributeInitializer(
     }
 
     override fun channelUnregistered(ctx: ChannelHandlerContext) {
+        super.channelUnregistered(ctx)
         val client = ctx.channel().attr(HttpClient.attributeKey).getAndSet(null)
         synchronized(clients) {
             if (client.release()) {
