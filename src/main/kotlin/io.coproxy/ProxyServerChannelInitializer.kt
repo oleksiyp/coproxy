@@ -4,7 +4,6 @@ import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.HttpServerExpectContinueHandler
-import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.timeout.IdleStateHandler
@@ -14,7 +13,8 @@ class ProxyServerChannelInitializer(
     val clientAttributeInitializer: HttpClientAttributeInitializer,
     val sslCtx: SslContext?,
     val config: CoProxyConfig,
-    val handler: CoProxyHandler
+    val handler: CoProxyHandler,
+    val idGen: ProxyIdGenerator
 ) : ChannelInitializer<SocketChannel>() {
 
     public override fun initChannel(ch: SocketChannel) {
@@ -33,6 +33,6 @@ class ProxyServerChannelInitializer(
             )
         )
         config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
-        p.addLast(ProxyServerHandler(handler))
+        p.addLast(ProxyServerHandler(handler, idGen))
     }
 }

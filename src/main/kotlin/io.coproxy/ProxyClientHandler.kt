@@ -5,7 +5,6 @@ import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.http.HttpObject
 import io.netty.handler.timeout.IdleStateEvent
 import io.netty.util.ReferenceCountUtil
-import kotlinx.coroutines.experimental.CoroutineName
 import kotlinx.coroutines.experimental.launch
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
@@ -14,7 +13,7 @@ class ProxyClientHandler : SimpleChannelInboundHandler<HttpObject>() {
     override fun channelInactive(ctx: ChannelHandlerContext) {
         val reqResponse = ctx.requestResponseNullable ?: return
         ctx.requestResponseNullable = null
-        launch(reqResponse.dispatcher + CoroutineName("closeJob")) {
+        launch(reqResponse.coroutineContext) {
             if (!reqResponse.responseStarted) {
                 reqResponse.clientExceptionHappened(RuntimeException("Error handling request"))
             } else {

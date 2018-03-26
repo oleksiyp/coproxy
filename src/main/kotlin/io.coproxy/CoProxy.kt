@@ -67,11 +67,12 @@ class CoProxy(
         bootstrap.childOption(ChannelOption.TCP_NODELAY, true)
         bootstrap.group(serverGroup, serverWorkerGroup)
             .channel(config.serverSocketChannel())
-            .childHandler(ProxyServerChannelInitializer(clientInitializer, sslCtx, config, handler))
+            .childHandler(ProxyServerChannelInitializer(clientInitializer, sslCtx, config, handler, idGen))
         return bootstrap
     }
 
     companion object {
+        private val idGen = ProxyIdGenerator()
         val log = LoggerFactory.getLogger(CoProxyConfig::class.java)
     }
 }

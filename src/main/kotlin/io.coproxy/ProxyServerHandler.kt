@@ -12,13 +12,14 @@ import java.nio.charset.Charset
 import java.util.concurrent.TimeoutException
 
 class ProxyServerHandler(
-    private val handler: CoProxyHandler
+    private val handler: CoProxyHandler,
+    private val idGen: ProxyIdGenerator
 ) : SimpleChannelInboundHandler<HttpObject>() {
 
     override fun channelUnregistered(ctx: ChannelHandlerContext) {
         val reqResponse = ctx.requestResponseNullable ?: return
         ctx.requestResponseNullable = null
-        launch(reqResponse.dispatcher) {
+        launch(reqResponse.coroutineContext) {
             reqResponse.closeServer()
         }
     }
@@ -37,7 +38,7 @@ class ProxyServerHandler(
             }
 
             val client = ctx.channel().attr(HttpClient.attributeKey).get()
-            val newReqResp = ProxyHttpRequestResponse(ctx.channel(), ctx.alloc())
+            val newReqResp = ProxyHttpRequestResponse(ctx.channel(), ctx.alloc(), idGen)
             ctx.requestResponse = newReqResp
 
             ReferenceCountUtil.retain(msg)

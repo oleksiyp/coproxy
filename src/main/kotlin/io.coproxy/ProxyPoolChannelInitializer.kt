@@ -16,15 +16,16 @@ class ProxyPoolChannelInitializer(
     val config: CoProxyConfig
 ) : AbstractChannelPoolHandler() {
 
-    override fun channelReleased(ch: Channel) {
-        log.info("Released {}", ch)
+    override fun channelAcquired(ch: Channel) {
+        log.info("Acquired {}", ch.id())
     }
 
-    override fun channelAcquired(ch: Channel?) {
-        log.info("Acquired {}", ch)
+    override fun channelReleased(ch: Channel) {
+        log.info("Released {}", ch.id())
     }
 
     override fun channelCreated(ch: Channel) {
+        log.info("New channel {}", ch.id())
         val p = ch.pipeline()
         if (poolKey.ssl) {
             val sslCtx = ch.attr(HttpClient.sslKeyAttribute).get()

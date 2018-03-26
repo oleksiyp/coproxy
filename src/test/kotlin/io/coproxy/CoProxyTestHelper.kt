@@ -47,7 +47,7 @@ class CoProxyTestHelper() {
                         .url(url)
                         .build()
 
-                    async { client.newCall(request).coExecute() }
+                    async(coroutineContext) { client.newCall(request).coExecute() }
                 }
                 .map { it.await() }
                 .map { Pair(it.code(), it.body()?.string() ?: "") }

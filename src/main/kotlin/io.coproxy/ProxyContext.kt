@@ -1,11 +1,15 @@
 package io.coproxy
 
 import io.netty.handler.codec.http.*
+import kotlinx.coroutines.experimental.CoroutineScope
+import kotlinx.coroutines.experimental.Job
 
-interface ProxyContext {
+interface ProxyContext : CoroutineScope {
     val request: HttpRequest
 
     val decoder: QueryStringDecoder
+
+    val job: Job
 
     suspend fun forward(url: String)
 

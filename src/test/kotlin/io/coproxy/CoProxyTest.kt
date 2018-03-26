@@ -48,7 +48,7 @@ class CoProxyTest {
         }
         h.coProxy(8081) {
             val msg = (1..5)
-                .map { async { simpleHttpGet("http://localhost:8082/$it") } }
+                .map { async(coroutineContext) { simpleHttpGet("http://localhost:8082/$it") } }
                 .map { it.await().throwIfError() }
                 .joinToString(" ") {
                     it.release {
@@ -71,14 +71,14 @@ class CoProxyTest {
 
     @Test
     fun simpleHttpTimeout() {
-        h.coProxy(8080) { forward("http://localhost:8081") }
+        h.coProxy(8080, clientIdleTimeoutMs = 2000) { forward("http://localhost:8081") }
         h.coProxy(8082) {
             delay(1500)
             replyOk("PART${request.uri()}")
         }
         h.coProxy(8081, clientIdleTimeoutMs = 1300) {
             val msg = (1..5)
-                .map { async { simpleHttpGet("http://localhost:8082/$it") } }
+                .map { async(coroutineContext) { simpleHttpGet("http://localhost:8082/$it") } }
                 .map { it.await().throwIfError() }
                 .joinToString(" ") {
                     it.release {
@@ -93,7 +93,7 @@ class CoProxyTest {
             "http://localhost:8080/",
             HttpResponseStatus.GATEWAY_TIMEOUT,
             null,
-            n = 20
+            n = 15
         )
     }
 }

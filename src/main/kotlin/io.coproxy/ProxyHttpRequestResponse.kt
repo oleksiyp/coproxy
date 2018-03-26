@@ -12,11 +12,13 @@ import kotlinx.coroutines.experimental.*
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.util.*
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeoutException
 
 class ProxyHttpRequestResponse(
     val server: Channel,
-    val alloc: ByteBufAllocator
+    val alloc: ByteBufAllocator,
+    val idGen: ProxyIdGenerator
 ) : RequestNotifier {
 
     private var handlerJob: Job? = null
@@ -30,7 +32,7 @@ class ProxyHttpRequestResponse(
     var responseStarted = false
     var responseSent = false
 
-    val dispatcher = server.eventLoop().asCoroutineDispatcher()
+    val coroutineContext = server.eventLoop().asCoroutineDispatcher() + CoroutineName(idGen.next())
 
     private var clientHandler: RequestResponseHandler? = null
 
@@ -103,10 +105,9 @@ class ProxyHttpRequestResponse(
         handler: CoProxyHandler
     ) {
         flowControl()
-        val ctx = dispatcher + CoroutineName("coProxyHandler")
-        handlerJob = launch(ctx) {
+        handlerJob = launch(coroutineContext) {
             try {
-                val context = ProxyContextImpl(request, poolMap)
+                val context = ProxyContextImpl(request, poolMap, this)
                 context.handler()
                 if (!finishOk) {
                     server.write(RuntimeException("No action"))
@@ -155,8 +156,7 @@ class ProxyHttpRequestResponse(
 
     fun finishIfSent() {
         if (responseSent && requestSent) {
-            val ctx = dispatcher + CoroutineName("finishJob")
-            launch(ctx) {
+            launch(coroutineContext) {
                 finish()
             }
         }
@@ -169,23 +169,21 @@ class ProxyHttpRequestResponse(
     override fun notifyRequestSent() {
         requestSent = true
         if (responseSent && requestSent) {
-            val ctx = dispatcher + CoroutineName("finishJob")
-            launch(ctx) {
+            launch(coroutineContext) {
                 finish()
             }
         }
     }
 
     fun clientExceptionHappened(cause: Throwable) {
-        val ctx = dispatcher + CoroutineName("clientExceptionJob")
-        launch(ctx) {
+        launch(coroutineContext) {
             if (responseStarted) {
-                log.error("Client-side channel error. Response sent. Closing connections", cause)
+                log.error("Client-side channel {}: {}. Response sent. Closing connections", cause::class.java.simpleName, cause.message, cause)
                 closeServer()
                 return@launch
             }
 
-            log.error("Client-side channel error. Sending error response", cause)
+            log.error("Client-side channel {}: {}. Sending error response", cause::class.java.simpleName, cause.message, cause)
 
             val response = errorResponse(cause)
             sendServer(response).wait()
@@ -210,15 +208,14 @@ class ProxyHttpRequestResponse(
     }
 
     fun serverExceptionHappened(cause: Throwable) {
-        val ctx = dispatcher + CoroutineName("serverExceptionJob")
-        launch(ctx) {
+        launch(coroutineContext) {
             if (responseStarted) {
-                log.error("Server-side channel error. Response sent. Closing connections", cause)
+                log.error("Server-side channel {}: {}. Response sent. Closing connections", cause::class.java.simpleName, cause.message, cause)
                 closeServer()
                 return@launch
             }
 
-            log.error("Server-side channel error. Sending error response", cause)
+            log.error("Server-side channel {}: {}. Sending error response", cause::class.java.simpleName, cause.message, cause)
             val response = errorResponse(cause)
             sendServer(response).wait()
             closeServer()
@@ -278,15 +275,17 @@ class ProxyHttpRequestResponse(
 
     inner class ProxyContextImpl(
         override val request: HttpRequest,
-        private val poolMap: ChannelPoolMap<HttpClientPoolKey, ChannelPool>
+        private val poolMap: ChannelPoolMap<HttpClientPoolKey, ChannelPool>,
+        private val scope: CoroutineScope
     ) : ProxyContext {
+
         override val decoder by lazy { QueryStringDecoder(request.uri()) }
 
         override suspend fun replyOk(msg: String, contentType: String) {
             val buffer = alloc.buffer()
             buffer.writeCharSequence(msg, ProxyServerHandler.utf8)
 
-            log.debug("Sending OK response: $msg")
+            log.debug("--> OK $msg START")
 
             val response = DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1,
@@ -309,7 +308,7 @@ class ProxyHttpRequestResponse(
                 request
             ).wait()
 
-            log.debug("Done sending response: $msg")
+            log.debug("--> OK $msg END")
         }
 
         override suspend fun forward(url: String) {
@@ -327,18 +326,20 @@ class ProxyHttpRequestResponse(
 
             request.headers().set(HttpHeaderNames.HOST, parser.hostHeader)
 
-            log.debug("Starting proxy transfer to $url")
-            become(
-                HttpProxyTransferHandler(
-                    channel,
-                    server,
-                    pool,
-                    this@ProxyHttpRequestResponse
-                ),
-                request
-            ).wait()
-
-            log.debug("Done proxy transfer")
+            log.info("==> $url START")
+            try {
+                become(
+                    HttpProxyTransferHandler(
+                        channel,
+                        server,
+                        pool,
+                        this@ProxyHttpRequestResponse
+                    ),
+                    request
+                ).wait()
+            } finally {
+                log.info("==> $url END")
+            }
         }
 
         override suspend fun simpleHttp(request: FullHttpRequest): FullHttpResponse {
@@ -347,11 +348,14 @@ class ProxyHttpRequestResponse(
 
             request.uri = decoder.uri()
 
+            log.info("??? ${request.method()} ${request.uri()} START")
+
             val parser = ProxyRewriteParser(uri)
             val poolKey = HttpClientPoolKey(parser.addr, parser.secure, true)
             val pool = poolMap[poolKey]
             val channel = pool.acquire().wait()
 
+            var status = "-"
             try {
                 val responsePromise = channel.eventLoop().newPromise<FullHttpResponse>()
 
@@ -360,11 +364,24 @@ class ProxyHttpRequestResponse(
                 }
 
                 channel.writeAndFlush(request)
-                return responsePromise.wait()
+                val response = responsePromise.wait()
+                status = response.status().toString()
+                return response
             } finally {
+                log.info("??? $status END")
                 pool.release(channel)
             }
         }
+
+        override val coroutineContext = scope.coroutineContext
+
+        override val context = scope.coroutineContext
+
+        override val job: Job
+            get() = coroutineContext[Job]!!
+
+        override val isActive
+            get() = scope.isActive
     }
 }
 
