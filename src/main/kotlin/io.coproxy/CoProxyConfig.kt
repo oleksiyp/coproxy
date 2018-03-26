@@ -8,6 +8,7 @@ import io.netty.channel.epoll.EpollSocketChannel
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
+import io.netty.handler.logging.LogLevel
 import java.util.concurrent.ThreadFactory
 
 data class CoProxyConfig(
@@ -15,14 +16,15 @@ data class CoProxyConfig(
     val ssl: Boolean = false,
     val serverThreads: Int = 8,
     val selectorThreads: Int = 1,
-    val connectionsPerDestintation: Int = 2,
+    val connectionsPerDestintation: Int = 2000,
     val accquireTimeoutMs: Long = 1000,
-    val maxPendingAcquires: Int = 2,
+    val maxPendingAcquires: Int = 100,
     val lruPool: Boolean = true,
     val epoll: Boolean = Epoll.isAvailable(),
     val serverIdleTimeoutMs: Long = 100000,
     val clientIdleTimeoutMs: Long = 10000,
-    val simpleHttpMaxContentLength: Int = 100 * 1024
+    val simpleHttpMaxContentLength: Int = 100 * 1024,
+    val trafficLogging: LogLevel? = null
 )
 
 fun CoProxyConfig.eventLoopGroup(n: Int, threadFactory: ThreadFactory) =

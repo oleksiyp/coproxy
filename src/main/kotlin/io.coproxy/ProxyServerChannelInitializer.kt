@@ -4,6 +4,8 @@ import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.HttpServerExpectContinueHandler
+import io.netty.handler.logging.LogLevel
+import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.timeout.IdleStateHandler
 import java.util.concurrent.TimeUnit
@@ -30,6 +32,7 @@ class ProxyServerChannelInitializer(
                 TimeUnit.MILLISECONDS
             )
         )
+        config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
         p.addLast(ProxyServerHandler(handler))
     }
 }

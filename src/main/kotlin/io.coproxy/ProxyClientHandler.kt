@@ -8,9 +8,9 @@ import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.experimental.CoroutineName
 import kotlinx.coroutines.experimental.launch
 import org.slf4j.LoggerFactory
+import java.util.concurrent.TimeoutException
 
 class ProxyClientHandler : SimpleChannelInboundHandler<HttpObject>() {
-
     override fun channelInactive(ctx: ChannelHandlerContext) {
         val reqResponse = ctx.requestResponseNullable ?: return
         ctx.requestResponseNullable = null

@@ -9,6 +9,7 @@ import io.netty.util.AttributeKey
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.Promise
 import org.slf4j.LoggerFactory
+import java.util.concurrent.TimeoutException
 
 class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
@@ -21,6 +22,7 @@ class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         val promise = ctx.channel().responsePromiseNullable
         if (promise != null) {
+            ctx.close()
             promise.setFailure(cause)
         } else {
             log.error("Simple client error. No promise attached. Just logging", cause)

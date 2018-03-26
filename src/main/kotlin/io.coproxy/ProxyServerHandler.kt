@@ -9,6 +9,7 @@ import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.experimental.launch
 import org.slf4j.LoggerFactory
 import java.nio.charset.Charset
+import java.util.concurrent.TimeoutException
 
 class ProxyServerHandler(
     private val handler: CoProxyHandler
@@ -51,11 +52,7 @@ class ProxyServerHandler(
     ): Boolean {
         val reqResp = ctx.requestResponseNullable ?: return true
 
-        if (reqResp.canHandleNextRequest()) {
-            return true
-        }
-
-        return false
+        return reqResp.canHandleNextRequest()
     }
 
     override fun channelWritabilityChanged(ctx: ChannelHandlerContext) {

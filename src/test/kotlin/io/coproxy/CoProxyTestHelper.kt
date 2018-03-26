@@ -1,10 +1,13 @@
 package io.coproxy
 
 import io.netty.handler.codec.http.HttpResponseStatus
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.runBlocking
+import okhttp3.*
 import org.junit.jupiter.api.Assertions
+import java.io.IOException
 import java.nio.charset.Charset
+import kotlin.coroutines.experimental.suspendCoroutine
 
 class CoProxyTestHelper() {
     val proxies = mutableListOf<CoProxy>()
@@ -31,28 +34,48 @@ class CoProxyTestHelper() {
         proxies.add(proxy)
     }
 
-    fun checkHttpGetOk(url: String, msg: String) {
-        checkHttpGet(url, HttpResponseStatus.OK, msg)
-    }
-
     fun checkHttpGet(
         url: String,
         statusCode: HttpResponseStatus,
-        msg: String? = null
+        msg: String? = null,
+        n: Int = 1
     ) {
+        runBlocking {
+            (1..n)
+                .map {
+                    val request = Request.Builder()
+                        .url(url)
+                        .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .build()
-
-        val response = client.newCall(request).execute()
-        Assertions.assertEquals(statusCode.code(), response.code(), "Status code")
-
-        val body = response.body()?.string() ?: ""
-        msg?.let { Assertions.assertEquals(it, body, "Body content") }
+                    async { client.newCall(request).coExecute() }
+                }
+                .map { it.await() }
+                .map { Pair(it.code(), it.body()?.string() ?: "") }
+                .forEach { (status, body) ->
+                    Assertions.assertEquals(statusCode.code(), status, "Bad status code. Body: $body")
+                    msg?.let { Assertions.assertEquals(it, body, "Body content") }
+                }
+        }
     }
 
     fun shutdown() {
-        proxies.forEach { it.stop() }
+        proxies.forEach { it.stopFast() }
+    }
+
+}
+
+private suspend fun Call.coExecute(): Response {
+    return suspendCoroutine {
+        enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                it.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                it.resume(response)
+            }
+
+        })
     }
 }
+

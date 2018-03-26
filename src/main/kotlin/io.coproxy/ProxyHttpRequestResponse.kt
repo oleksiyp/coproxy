@@ -12,6 +12,7 @@ import kotlinx.coroutines.experimental.*
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.util.*
+import java.util.concurrent.TimeoutException
 
 class ProxyHttpRequestResponse(
     val server: Channel,
@@ -107,8 +108,14 @@ class ProxyHttpRequestResponse(
             try {
                 val context = ProxyContextImpl(request, poolMap)
                 context.handler()
+                if (!finishOk) {
+                    server.write(RuntimeException("No action"))
+                }
             } catch (ex: JobCancellationException) {
-                log.info("Job request/response handler job cancelled")
+                log.debug("Job request/response handler job cancelled")
+                if (!finishOk) {
+                    server.write(RuntimeException("Job canceled"))
+                }
             } catch (ex: Throwable) {
                 server.write(ex)
             }
@@ -127,6 +134,7 @@ class ProxyHttpRequestResponse(
             handlerJob?.cancel()
             handlerJob?.join()
         }
+
         if (!responseSent) {
 
         }
@@ -278,7 +286,7 @@ class ProxyHttpRequestResponse(
             val buffer = alloc.buffer()
             buffer.writeCharSequence(msg, ProxyServerHandler.utf8)
 
-            log.info("Sending OK response: $msg")
+            log.debug("Sending OK response: $msg")
 
             val response = DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1,
@@ -300,7 +308,8 @@ class ProxyHttpRequestResponse(
                 SkipHttpHandler(server, this@ProxyHttpRequestResponse),
                 request
             ).wait()
-            log.info("Done sending response: $msg")
+
+            log.debug("Done sending response: $msg")
         }
 
         override suspend fun forward(url: String) {
@@ -316,7 +325,9 @@ class ProxyHttpRequestResponse(
                 shouldCloseServer = true
             }
 
-            log.info("Starting proxy transfer")
+            request.headers().set(HttpHeaderNames.HOST, parser.hostHeader)
+
+            log.debug("Starting proxy transfer to $url")
             become(
                 HttpProxyTransferHandler(
                     channel,
@@ -326,7 +337,8 @@ class ProxyHttpRequestResponse(
                 ),
                 request
             ).wait()
-            log.info("Done proxy transfer")
+
+            log.debug("Done proxy transfer")
         }
 
         override suspend fun simpleHttp(request: FullHttpRequest): FullHttpResponse {

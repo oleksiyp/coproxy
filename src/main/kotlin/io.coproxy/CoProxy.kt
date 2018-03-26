@@ -1,24 +1,27 @@
 package io.coproxy
 
 import io.netty.bootstrap.ServerBootstrap
-import io.netty.channel.*
+import io.netty.channel.Channel
+import io.netty.channel.ChannelOption
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.handler.ssl.util.SelfSignedCertificate
 import io.netty.util.concurrent.DefaultThreadFactory
-import io.netty.util.concurrent.Future
-import kotlinx.coroutines.experimental.*
 import org.slf4j.LoggerFactory
+import java.util.concurrent.TimeUnit
 
 typealias CoProxyHandler = suspend ProxyContext.() -> Unit
 
 class CoProxy(
-    val config: CoProxyConfig = CoProxyConfig(),
+    val config: CoProxyConfig = CoProxyConfig(trafficLogging = null),
     val handler: CoProxyHandler
 ) {
-    private val serverGroup = config.eventLoopGroup(config.selectorThreads, DefaultThreadFactory("selector"))
-    private val serverWorkerGroup = config.eventLoopGroup(config.serverThreads, DefaultThreadFactory("worker"))
+    private val serverGroup = config.eventLoopGroup(config.selectorThreads,
+        DefaultThreadFactory("selector:" + config.port))
+    private val serverWorkerGroup = config.eventLoopGroup(config.serverThreads,
+        DefaultThreadFactory("worker:" + config.port))
+
     private val sslCtx: SslContext? = configureSSL()
     private val clientSslCtx = configureClientSSL()
     private val clientInitializer = HttpClientAttributeInitializer(clientSslCtx, config)
@@ -35,6 +38,13 @@ class CoProxy(
             .sync()
         serverWorkerGroup.shutdownGracefully()
             .sync()
+    }
+
+    fun stopFast() {
+        listOf(
+            serverGroup.shutdownGracefully(100, 500, TimeUnit.MILLISECONDS),
+            serverWorkerGroup.shutdownGracefully(100, 500, TimeUnit.MILLISECONDS)
+        ).forEach { it.sync() }
     }
 
     private fun configureClientSSL(): SslContext {
