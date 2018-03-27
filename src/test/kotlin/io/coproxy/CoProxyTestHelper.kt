@@ -1,6 +1,7 @@
 package io.coproxy
 
 import io.netty.handler.codec.http.HttpResponseStatus
+import io.netty.handler.logging.LogLevel
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.runBlocking
 import okhttp3.*
@@ -27,7 +28,8 @@ class CoProxyTestHelper() {
                 serverThreads = 1,
                 clientIdleTimeoutMs = clientIdleTimeoutMs,
                 serverIdleTimeoutMs = serverIdleTimeoutMs,
-                maxPendingAcquires = 5
+                maxPendingAcquires = 5,
+                trafficLogging = LogLevel.DEBUG
             )
         )
         proxy.listen()

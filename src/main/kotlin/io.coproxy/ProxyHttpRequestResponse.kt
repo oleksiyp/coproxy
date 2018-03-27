@@ -12,7 +12,6 @@ import kotlinx.coroutines.experimental.*
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.util.*
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeoutException
 
 class ProxyHttpRequestResponse(
@@ -113,7 +112,7 @@ class ProxyHttpRequestResponse(
                     server.write(RuntimeException("No action"))
                 }
             } catch (ex: JobCancellationException) {
-                log.debug("Job request/response handler job cancelled")
+                log.debug("Request/response handler job cancelled")
                 if (!finishOk) {
                     server.write(RuntimeException("Job canceled"))
                 }
@@ -175,15 +174,27 @@ class ProxyHttpRequestResponse(
         }
     }
 
-    fun clientExceptionHappened(cause: Throwable) {
+    fun clientExceptionHappened(cause: Throwable, channel: Channel) {
         launch(coroutineContext) {
             if (responseStarted) {
-                log.error("Client-side channel {}: {}. Response sent. Closing connections", cause::class.java.simpleName, cause.message, cause)
+                log.error(
+                    "Client-side channel {} {}: {}. Response sent. Closing connections",
+                    channel.id(),
+                    cause::class.java.simpleName,
+                    cause.message,
+                    cause
+                )
                 closeServer()
                 return@launch
             }
 
-            log.error("Client-side channel {}: {}. Sending error response", cause::class.java.simpleName, cause.message, cause)
+            log.error(
+                "Client-side channel {} {}: {}. Sending error response",
+                channel.id(),
+                cause::class.java.simpleName,
+                cause.message,
+                cause
+            )
 
             val response = errorResponse(cause)
             sendServer(response).wait()
@@ -210,12 +221,24 @@ class ProxyHttpRequestResponse(
     fun serverExceptionHappened(cause: Throwable) {
         launch(coroutineContext) {
             if (responseStarted) {
-                log.error("Server-side channel {}: {}. Response sent. Closing connections", cause::class.java.simpleName, cause.message, cause)
+                log.error(
+                    "Server-side channel {} {}: {}. Response sent. Closing connections",
+                    server.id(),
+                    cause::class.java.simpleName,
+                    cause.message,
+                    cause
+                )
                 closeServer()
                 return@launch
             }
 
-            log.error("Server-side channel {}: {}. Sending error response", cause::class.java.simpleName, cause.message, cause)
+            log.error(
+                "Server-side channel {} {}: {}. Sending error response",
+                server.id(),
+                cause::class.java.simpleName,
+                cause.message,
+                cause
+            )
             val response = errorResponse(cause)
             sendServer(response).wait()
             closeServer()
@@ -367,6 +390,10 @@ class ProxyHttpRequestResponse(
                 val response = responsePromise.wait()
                 status = response.status().toString()
                 return response
+            } catch (ex: Throwable) {
+                channel.close()
+                log.info("??? {} CLOSE", ex::class.java.simpleName)
+                throw ex
             } finally {
                 log.info("??? $status END")
                 pool.release(channel)

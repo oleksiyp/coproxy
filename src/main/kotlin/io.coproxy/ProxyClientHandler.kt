@@ -15,8 +15,14 @@ class ProxyClientHandler : SimpleChannelInboundHandler<HttpObject>() {
         ctx.requestResponseNullable = null
         launch(reqResponse.coroutineContext) {
             if (!reqResponse.responseStarted) {
-                reqResponse.clientExceptionHappened(RuntimeException("Error handling request"))
+                reqResponse.clientExceptionHappened(RuntimeException("Channel unexpectedly closed"), ctx.channel())
             } else {
+                if (!reqResponse.responseSent) {
+                    log.error(
+                        "Client-side channel {} unexpectedly closed. Response partly sent",
+                        ctx.channel().id()
+                    )
+                }
                 reqResponse.finish()
             }
         }
@@ -40,9 +46,15 @@ class ProxyClientHandler : SimpleChannelInboundHandler<HttpObject>() {
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         val requestResponse = ctx.requestResponseNullable
         if (requestResponse == null) {
-            log.error("Client-side channel error. Bad state", cause)
+            log.error(
+                "Client-side channel {} {}: {}. Bad state",
+                ctx.channel().id(),
+                cause::class.java.simpleName,
+                cause.message,
+                cause
+            )
         } else {
-            requestResponse.clientExceptionHappened(cause)
+            requestResponse.clientExceptionHappened(cause, ctx.channel())
         }
     }
 
