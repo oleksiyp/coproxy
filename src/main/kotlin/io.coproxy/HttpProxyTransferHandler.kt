@@ -35,7 +35,7 @@ class HttpProxyTransferHandler(
         client.config().isAutoRead = true
         client.attr(ProxyHttpRequestResponse.attributeKey).set(null)
         if (closeClient) {
-            client.close().wait()
+            client.halfCloseOutput(1000).wait()
         }
         clientPool?.release(client)?.wait()
         finishFuture.setSuccess()

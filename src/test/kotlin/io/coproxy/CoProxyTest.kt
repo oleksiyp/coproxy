@@ -76,7 +76,7 @@ class CoProxyTest {
             delay(1500)
             replyOk("PART${request.uri()}")
         }
-        h.coProxy(8081, clientIdleTimeoutMs = 1300) {
+        h.coProxy(8081, simpleHttpIdleTimeoutMs = 1000) {
             val msg = (1..5)
                 .map { async(coroutineContext) { simpleHttpGet("http://localhost:8082/$it") } }
                 .map { it.await().throwIfError() }

@@ -2,6 +2,8 @@ package io.coproxy
 
 import io.netty.channel.Channel
 import io.netty.channel.ChannelFuture
+import io.netty.channel.socket.DuplexChannel
+import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpResponse
 import io.netty.util.ReferenceCountUtil.release
 import io.netty.util.ReferenceCounted
@@ -10,6 +12,7 @@ import kotlinx.coroutines.experimental.cancelFutureOnCompletion
 import kotlinx.coroutines.experimental.suspendCancellableCoroutine
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 suspend fun ChannelFuture.wait(): Channel {
     if (isDone) {
@@ -73,3 +76,23 @@ fun <F : ReferenceCounted, T> F.release(block: F.() -> T): T {
     release()
     return res
 }
+
+fun Channel.halfCloseOutput(fullCloseTimeoutMs: Long): ChannelFuture {
+    if (this is DuplexChannel) {
+
+        shutdownOutput()
+
+        val task = eventLoop().schedule({
+            if (isActive) {
+                HttpClient.log.warn("Channel closed because of no activity {}", id())
+                close()
+            }
+        }, fullCloseTimeoutMs, TimeUnit.MILLISECONDS)
+
+        return closeFuture().addListener {
+            task.cancel(false)
+        }
+    } else
+        return close()
+}
+

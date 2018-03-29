@@ -32,22 +32,30 @@ class ProxyPoolChannelInitializer(
             p.addLast(sslCtx.newHandler(ch.alloc()))
         }
 
+        config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
         p.addLast(HttpClientCodec())
         p.addLast(HttpContentDecompressor())
-        p.addLast(
-            IdleStateHandler(
-                0,
-                0,
-                config.clientIdleTimeoutMs,
-                TimeUnit.MILLISECONDS
-            )
-        )
         p.addLast(WritableExceptionHandler())
-        config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
         if (poolKey.simpleHttp) {
+            p.addLast(
+                IdleStateHandler(
+                    0,
+                    0,
+                    config.simpleHttpIdleTimeoutMs,
+                    TimeUnit.MILLISECONDS
+                )
+            )
             p.addLast(HttpObjectAggregator(config.simpleHttpMaxContentLength))
             p.addLast(SimpleClientHandler())
         } else {
+            p.addLast(
+                IdleStateHandler(
+                    0,
+                    0,
+                    config.clientIdleTimeoutMs,
+                    TimeUnit.MILLISECONDS
+                )
+            )
             p.addLast(ProxyClientHandler())
         }
     }

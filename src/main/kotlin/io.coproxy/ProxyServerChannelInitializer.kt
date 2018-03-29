@@ -20,6 +20,7 @@ class ProxyServerChannelInitializer(
     public override fun initChannel(ch: SocketChannel) {
         val p = ch.pipeline()
         p.addLast(clientAttributeInitializer)
+        config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
         sslCtx?.let { p.addLast(it.newHandler(ch.alloc())) }
         p.addLast(HttpServerCodec())
         p.addLast(HttpServerExpectContinueHandler())
@@ -32,7 +33,6 @@ class ProxyServerChannelInitializer(
                 TimeUnit.MILLISECONDS
             )
         )
-        config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
         p.addLast(ProxyServerHandler(handler, idGen))
     }
 }

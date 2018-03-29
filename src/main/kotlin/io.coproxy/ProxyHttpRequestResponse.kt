@@ -49,9 +49,9 @@ class ProxyHttpRequestResponse(
         if (msg is HttpResponse) {
             responseStarted = true
             if (!HttpUtil.isKeepAlive(msg)) {
-                HttpUtil.setKeepAlive(msg, true)
                 shouldCloseClient = true
             }
+            HttpUtil.setKeepAlive(msg, !shouldCloseServer)
         }
 
         val future = clientHandler?.sendServer(msg)
@@ -135,10 +135,6 @@ class ProxyHttpRequestResponse(
             handlerJob?.join()
         }
 
-        if (!responseSent) {
-
-        }
-
         val handler = clientHandler
         clientHandler = null
 
@@ -148,8 +144,10 @@ class ProxyHttpRequestResponse(
 
         server.flush()
 
+        server.attr(ProxyHttpRequestResponse.attributeKey).set(null)
+
         if (shouldCloseServer) {
-            server.close()
+            server.halfCloseOutput(1000).wait()
         }
     }
 
@@ -240,6 +238,7 @@ class ProxyHttpRequestResponse(
                 cause
             )
             val response = errorResponse(cause)
+            shouldCloseServer = true
             sendServer(response).wait()
             closeServer()
         }
@@ -273,8 +272,8 @@ class ProxyHttpRequestResponse(
 
 
     suspend fun closeServer() {
+        shouldCloseServer = true
         finish(true)
-        server.close()
     }
 
     fun canHandleNextRequest() = finishOk && !shouldCloseServer
@@ -343,9 +342,9 @@ class ProxyHttpRequestResponse(
             channel.attr(ProxyHttpRequestResponse.attributeKey).set(this@ProxyHttpRequestResponse)
 
             if (!HttpUtil.isKeepAlive(request)) {
-                HttpUtil.setKeepAlive(request, true)
                 shouldCloseServer = true
             }
+            HttpUtil.setKeepAlive(request, !shouldCloseClient)
 
             request.headers().set(HttpHeaderNames.HOST, parser.hostHeader)
 
@@ -391,7 +390,7 @@ class ProxyHttpRequestResponse(
                 status = response.status().toString()
                 return response
             } catch (ex: Throwable) {
-                channel.close()
+                channel.halfCloseOutput(1000).wait()
                 log.info("??? {} CLOSE", ex::class.java.simpleName)
                 throw ex
             } finally {

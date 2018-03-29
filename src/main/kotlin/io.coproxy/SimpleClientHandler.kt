@@ -3,6 +3,7 @@ package io.coproxy
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.channel.internal.ChannelUtils
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.timeout.IdleStateEvent
 import io.netty.util.AttributeKey
@@ -12,6 +13,10 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
 class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
+    override fun channelInactive(ctx: ChannelHandlerContext?) {
+        super.channelInactive(ctx)
+    }
+
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
         ReferenceCountUtil.retain(msg)
         val responsePromise = ctx.channel().responsePromise
@@ -22,7 +27,6 @@ class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         val promise = ctx.channel().responsePromiseNullable
         if (promise != null) {
-            ctx.close()
             promise.setFailure(cause)
         } else {
             log.error("Simple client error. No promise attached. Just logging", cause)

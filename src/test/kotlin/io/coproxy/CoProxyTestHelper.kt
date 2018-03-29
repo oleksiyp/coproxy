@@ -19,6 +19,7 @@ class CoProxyTestHelper() {
         port: Int,
         clientIdleTimeoutMs: Long = 2000,
         serverIdleTimeoutMs: Long = 10000,
+        simpleHttpIdleTimeoutMs: Long = 2000,
         handler: suspend ProxyContext.() -> Unit
     ) {
         val proxy = CoProxy(
@@ -28,6 +29,7 @@ class CoProxyTestHelper() {
                 serverThreads = 1,
                 clientIdleTimeoutMs = clientIdleTimeoutMs,
                 serverIdleTimeoutMs = serverIdleTimeoutMs,
+                simpleHttpIdleTimeoutMs = simpleHttpIdleTimeoutMs,
                 maxPendingAcquires = 5,
                 trafficLogging = LogLevel.DEBUG
             )
