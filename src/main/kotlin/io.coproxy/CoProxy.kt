@@ -67,7 +67,7 @@ class CoProxy(
         bootstrap.childOption(ChannelOption.TCP_NODELAY, true)
         bootstrap.group(serverGroup, serverWorkerGroup)
             .channel(config.serverSocketChannel())
-            .childHandler(ProxyServerChannelInitializer(clientInitializer, sslCtx, config, handler, idGen))
+            .childHandler(ServerProxyChannelInitializer(clientInitializer, sslCtx, config, handler, idGen))
         return bootstrap
     }
 

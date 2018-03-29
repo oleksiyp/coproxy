@@ -15,9 +15,10 @@ import java.util.*
 import java.util.concurrent.TimeoutException
 
 class ProxyHttpRequestResponse(
+    val config: CoProxyConfig,
     val server: Channel,
     val alloc: ByteBufAllocator,
-    val idGen: ProxyIdGenerator
+    idGen: ProxyIdGenerator
 ) : RequestNotifier {
 
     private var handlerJob: Job? = null
@@ -147,7 +148,7 @@ class ProxyHttpRequestResponse(
         server.attr(ProxyHttpRequestResponse.attributeKey).set(null)
 
         if (shouldCloseServer) {
-            server.halfCloseOutput(1000).wait()
+            server.halfCloseOutput(config.halfCloseTimeoutMs).wait()
         }
     }
 
@@ -246,7 +247,7 @@ class ProxyHttpRequestResponse(
 
     private fun errorResponse(cause: Throwable): DefaultFullHttpResponse {
         val buffer = alloc.buffer()
-        buffer.writeCharSequence(cause.message, ProxyServerHandler.utf8)
+        buffer.writeCharSequence(cause.message, ServerProxyHandler.utf8)
 
         val code = when (cause) {
             is TimeoutException -> HttpResponseStatus.GATEWAY_TIMEOUT
@@ -305,7 +306,7 @@ class ProxyHttpRequestResponse(
 
         override suspend fun replyOk(msg: String, contentType: String) {
             val buffer = alloc.buffer()
-            buffer.writeCharSequence(msg, ProxyServerHandler.utf8)
+            buffer.writeCharSequence(msg, ServerProxyHandler.utf8)
 
             log.debug("--> OK $msg START")
 
@@ -355,7 +356,8 @@ class ProxyHttpRequestResponse(
                         channel,
                         server,
                         pool,
-                        this@ProxyHttpRequestResponse
+                        this@ProxyHttpRequestResponse,
+                        config
                     ),
                     request
                 ).wait()
@@ -390,7 +392,7 @@ class ProxyHttpRequestResponse(
                 status = response.status().toString()
                 return response
             } catch (ex: Throwable) {
-                channel.halfCloseOutput(1000).wait()
+                channel.halfCloseOutput(config.halfCloseTimeoutMs).wait()
                 log.info("??? {} CLOSE", ex::class.java.simpleName)
                 throw ex
             } finally {

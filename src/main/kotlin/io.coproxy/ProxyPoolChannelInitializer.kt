@@ -5,7 +5,6 @@ import io.netty.channel.pool.AbstractChannelPoolHandler
 import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpContentDecompressor
 import io.netty.handler.codec.http.HttpObjectAggregator
-import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.timeout.IdleStateHandler
 import org.slf4j.LoggerFactory
@@ -56,7 +55,7 @@ class ProxyPoolChannelInitializer(
                     TimeUnit.MILLISECONDS
                 )
             )
-            p.addLast(ProxyClientHandler())
+            p.addLast(ClientProxyHandler())
         }
     }
 

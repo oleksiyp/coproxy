@@ -11,7 +11,8 @@ import org.slf4j.LoggerFactory
 import java.nio.charset.Charset
 import java.util.concurrent.TimeoutException
 
-class ProxyServerHandler(
+class ServerProxyHandler(
+    val config: CoProxyConfig,
     private val handler: CoProxyHandler,
     private val idGen: ProxyIdGenerator
 ) : SimpleChannelInboundHandler<HttpObject>() {
@@ -38,7 +39,7 @@ class ProxyServerHandler(
             }
 
             val client = ctx.channel().attr(HttpClient.attributeKey).get()
-            val newReqResp = ProxyHttpRequestResponse(ctx.channel(), ctx.alloc(), idGen)
+            val newReqResp = ProxyHttpRequestResponse(config, ctx.channel(), ctx.alloc(), idGen)
             ctx.requestResponse = newReqResp
 
             ReferenceCountUtil.retain(msg)
@@ -83,7 +84,7 @@ class ProxyServerHandler(
     }
 
     companion object {
-        val log = LoggerFactory.getLogger(ProxyServerHandler::class.java)
+        val log = LoggerFactory.getLogger(ServerProxyHandler::class.java)
 
         val utf8 = Charset.forName("UTF-8")
     }

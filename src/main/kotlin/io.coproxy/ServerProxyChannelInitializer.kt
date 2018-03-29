@@ -9,7 +9,7 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.timeout.IdleStateHandler
 import java.util.concurrent.TimeUnit
 
-class ProxyServerChannelInitializer(
+class ServerProxyChannelInitializer(
     val clientAttributeInitializer: HttpClientAttributeInitializer,
     val sslCtx: SslContext?,
     val config: CoProxyConfig,
@@ -33,6 +33,6 @@ class ProxyServerChannelInitializer(
                 TimeUnit.MILLISECONDS
             )
         )
-        p.addLast(ProxyServerHandler(handler, idGen))
+        p.addLast(ServerProxyHandler(config, handler, idGen))
     }
 }

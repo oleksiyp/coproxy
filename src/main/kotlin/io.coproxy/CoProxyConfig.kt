@@ -27,7 +27,8 @@ data class CoProxyConfig(
     val clientIdleTimeoutMs: Long = SECONDS.toMillis(30),
     val simpleHttpIdleTimeoutMs: Long = SECONDS.toMillis(45),
     val simpleHttpMaxContentLength: Int = 100 * 1024,
-    val trafficLogging: LogLevel? = null
+    val trafficLogging: LogLevel? = null,
+    val halfCloseTimeoutMs: Long = SECONDS.toMillis(3)
 )
 
 fun CoProxyConfig.eventLoopGroup(n: Int, threadFactory: ThreadFactory) =

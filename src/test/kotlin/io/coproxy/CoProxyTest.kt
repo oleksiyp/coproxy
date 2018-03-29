@@ -58,8 +58,7 @@ class CoProxyTest {
 
             replyOk(msg)
         }
-        (1..100).forEach {
-            println(it)
+        (1..10).forEach {
             h.checkHttpGet(
                 "http://localhost:8080/",
                 HttpResponseStatus.OK,

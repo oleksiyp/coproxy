@@ -9,7 +9,7 @@ import kotlinx.coroutines.experimental.launch
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
-class ProxyClientHandler : SimpleChannelInboundHandler<HttpObject>() {
+class ClientProxyHandler : SimpleChannelInboundHandler<HttpObject>() {
     override fun channelInactive(ctx: ChannelHandlerContext) {
         val reqResponse = ctx.requestResponseNullable ?: return
         ctx.requestResponseNullable = null
@@ -69,6 +69,6 @@ class ProxyClientHandler : SimpleChannelInboundHandler<HttpObject>() {
     }
 
     companion object {
-        val log = LoggerFactory.getLogger(ProxyClientHandler::class.java)
+        val log = LoggerFactory.getLogger(ClientProxyHandler::class.java)
     }
 }

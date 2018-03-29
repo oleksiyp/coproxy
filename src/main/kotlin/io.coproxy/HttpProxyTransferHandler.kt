@@ -10,7 +10,8 @@ class HttpProxyTransferHandler(
     client: Channel,
     server: Channel,
     clientPool: ChannelPool? = null,
-    val requestNotifier: RequestNotifier? = null
+    val requestNotifier: RequestNotifier? = null,
+    val config: CoProxyConfig
 ) : ProxyTransferHandler(client, server, clientPool) {
 
     override fun sendClient(msg: Any): ChannelFuture {
@@ -35,7 +36,7 @@ class HttpProxyTransferHandler(
         client.config().isAutoRead = true
         client.attr(ProxyHttpRequestResponse.attributeKey).set(null)
         if (closeClient) {
-            client.halfCloseOutput(1000).wait()
+            client.halfCloseOutput(config.halfCloseTimeoutMs).wait()
         }
         clientPool?.release(client)?.wait()
         finishFuture.setSuccess()
