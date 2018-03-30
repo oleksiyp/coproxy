@@ -26,4 +26,10 @@ interface ProxyContext : CoroutineScope {
 
         return simpleHttp(request)
     }
+
+    suspend fun location(
+        prefix: String = "",
+        regex: String = "",
+        block: suspend LocationContext.() -> Unit
+    )
 }

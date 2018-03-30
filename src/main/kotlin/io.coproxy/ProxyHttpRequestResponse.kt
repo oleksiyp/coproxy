@@ -301,6 +301,13 @@ class ProxyHttpRequestResponse(
         private val poolMap: ChannelPoolMap<HttpClientPoolKey, ChannelPool>,
         private val scope: CoroutineScope
     ) : ProxyContext {
+        override suspend fun location(
+            prefix: String,
+            regex: String,
+            block: suspend LocationContext.() -> Unit
+        ) {
+            LocationContext(request.uri(), arrayOf()).location(prefix, regex, block);
+        }
 
         override val decoder by lazy { QueryStringDecoder(request.uri()) }
 
@@ -348,6 +355,7 @@ class ProxyHttpRequestResponse(
             HttpUtil.setKeepAlive(request, !shouldCloseClient)
 
             request.headers().set(HttpHeaderNames.HOST, parser.hostHeader)
+            request.uri = parser.queryString
 
             log.info("==> $url START")
             try {
@@ -421,3 +429,4 @@ var ChannelHandlerContext.requestResponse: ProxyHttpRequestResponse
     get () = channel().attr(ProxyHttpRequestResponse.attributeKey).get()
             ?: throw RuntimeException("bad state")
     set(value) = channel().attr(ProxyHttpRequestResponse.attributeKey).set(value)
+

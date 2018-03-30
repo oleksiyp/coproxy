@@ -3,8 +3,14 @@ package io.coproxy
 import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
+import kotlinx.coroutines.experimental.runBlocking
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
+import java.nio.charset.Charset
+import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.stream.Collectors
 
 
 class CoProxyTest {
@@ -94,5 +100,50 @@ class CoProxyTest {
             null,
             n = 15
         )
+    }
+
+    @Test
+    fun location() {
+        val n = AtomicInteger()
+        h.coProxy(8080) {
+            val uri = when (n.getAndIncrement() % 4) {
+                0 -> "/p1/l1"
+                1 -> "/p2/l1"
+                2 -> "/p1/l2"
+                3 -> "/p2/l2"
+                else -> throw IllegalStateException()
+            }
+
+            val response = simpleHttpGet("http://localhost:8081$uri")
+
+            replyOk(response.content().toString(Charset.defaultCharset()))
+        }
+
+        h.coProxy(8081) {
+            location("/p1") {
+                location("/l1") { replyOk("r1") }
+                location("/l2") { replyOk("r2") }
+            }
+            location("/p2") {
+                location("/l1") { replyOk("r3") }
+                location("/l2") { replyOk("r4") }
+            }
+        }
+
+        runBlocking {
+            h.spawnRequests("http://localhost:8080/", 100)
+                .onEach { (status, _) -> Assertions.assertEquals(200, status) }
+                .map { it.second }
+                .stream()
+                .collect(
+                    Collectors.toMap(
+                        { key: String -> key },
+                        { 1 },
+                        { a: Int, b: Int -> a + b }
+                    )
+                ).forEach { (_, count) ->
+                    Assertions.assertEquals(25, count)
+                }
+        }
     }
 }

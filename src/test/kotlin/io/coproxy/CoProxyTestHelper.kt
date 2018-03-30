@@ -45,21 +45,28 @@ class CoProxyTestHelper() {
         n: Int = 1
     ) {
         runBlocking {
-            (1..n)
-                .map {
-                    val request = Request.Builder()
-                        .url(url)
-                        .build()
-
-                    async(coroutineContext) { client.newCall(request).coExecute() }
-                }
-                .map { it.await() }
-                .map { Pair(it.code(), it.body()?.string() ?: "") }
+            spawnRequests(url, n)
                 .forEach { (status, body) ->
                     Assertions.assertEquals(statusCode.code(), status, "Bad status code. Body: $body")
                     msg?.let { Assertions.assertEquals(it, body, "Body content") }
                 }
         }
+    }
+
+    suspend fun spawnRequests(
+        url: String,
+        n: Int = 1
+    ): List<Pair<Int, String>> {
+        return (1..n)
+            .map {
+                val request = Request.Builder()
+                    .url(url)
+                    .build()
+
+                async { client.newCall(request).coExecute() }
+            }
+            .map { it.await() }
+            .map { Pair(it.code(), it.body()?.string() ?: "") }
     }
 
     fun shutdown() {
