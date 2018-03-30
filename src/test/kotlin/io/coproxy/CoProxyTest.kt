@@ -103,7 +103,7 @@ class CoProxyTest {
     }
 
     @Test
-    fun location() {
+    fun locationPrefix() {
         val n = AtomicInteger()
         h.coProxy(8080) {
             val uri = when (n.getAndIncrement() % 4) {
@@ -143,6 +143,37 @@ class CoProxyTest {
                     )
                 ).forEach { (_, count) ->
                     Assertions.assertEquals(25, count)
+                }
+        }
+    }
+
+    @Test
+    fun locationRegex() {
+        val n = AtomicInteger()
+        h.coProxy(8080) {
+            val response = simpleHttpGet("http://localhost:8081/${n.getAndIncrement() % 10}")
+            replyOk(response.content().toString(Charset.defaultCharset()))
+        }
+
+        h.coProxy(8081) {
+            location(regex = "/(.+)") {
+                replyOk("r$g1")
+            }
+        }
+
+        runBlocking {
+            h.spawnRequests("http://localhost:8080/", 100)
+                .onEach { (status, _) -> Assertions.assertEquals(200, status) }
+                .map { it.second }
+                .stream()
+                .collect(
+                    Collectors.toMap(
+                        { key: String -> key },
+                        { 1 },
+                        { a: Int, b: Int -> a + b }
+                    )
+                ).forEach { (_, count) ->
+                    Assertions.assertEquals(10, count)
                 }
         }
     }
