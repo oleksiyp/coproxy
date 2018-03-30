@@ -114,9 +114,7 @@ class CoProxyTest {
                 else -> throw IllegalStateException()
             }
 
-            val response = simpleHttpGet("http://localhost:8081$uri")
-
-            replyOk(response.content().toString(Charset.defaultCharset()))
+            forward("http://localhost:8081$uri")
         }
 
         h.coProxy(8081) {
@@ -151,14 +149,11 @@ class CoProxyTest {
     fun locationRegex() {
         val n = AtomicInteger()
         h.coProxy(8080) {
-            val response = simpleHttpGet("http://localhost:8081/${n.getAndIncrement() % 10}")
-            replyOk(response.content().toString(Charset.defaultCharset()))
+            forward("http://localhost:8081/${n.getAndIncrement() % 10}")
         }
 
         h.coProxy(8081) {
-            location(regex = "/(.+)") {
-                replyOk("r$g1")
-            }
+            location(regex = "/(.+)") { replyOk("r$g1") }
         }
 
         runBlocking {
