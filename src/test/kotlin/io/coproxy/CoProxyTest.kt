@@ -172,4 +172,34 @@ class CoProxyTest {
                 }
         }
     }
+
+    @Test
+    fun locationHost() {
+        val n = AtomicInteger()
+        h.coProxy(8080) {
+            forward("http://localhost:8081/", hostHeader = "host${n.getAndIncrement() % 3}")
+        }
+
+        h.coProxy(8081) {
+            location(host = "host0") { replyOk("r0") }
+            location(host = "host1") { replyOk("r1") }
+            location(host = "host2") { replyOk("r2") }
+        }
+
+        runBlocking {
+            h.spawnRequests("http://localhost:8080/", 99)
+                .onEach { (status, _) -> Assertions.assertEquals(200, status) }
+                .map { it.second }
+                .stream()
+                .collect(
+                    Collectors.toMap(
+                        { key: String -> key },
+                        { 1 },
+                        { a: Int, b: Int -> a + b }
+                    )
+                ).forEach { (_, count) ->
+                    Assertions.assertEquals(33, count)
+                }
+        }
+    }
 }

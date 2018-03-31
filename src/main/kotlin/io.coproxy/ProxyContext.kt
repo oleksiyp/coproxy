@@ -11,7 +11,7 @@ interface ProxyContext : CoroutineScope {
 
     val job: Job
 
-    suspend fun forward(url: String)
+    suspend fun forward(url: String, hostHeader: String? = null)
 
     suspend fun replyOk(msg: String, contentType: String = "text/plain")
 
@@ -29,7 +29,8 @@ interface ProxyContext : CoroutineScope {
 
     suspend fun location(
         prefix: String = "",
-        regex: String = "",
+        regex: String? = null,
+        host: String? = null,
         block: suspend LocationContext.() -> Unit
     )
 }

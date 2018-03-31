@@ -301,13 +301,6 @@ class ProxyHttpRequestResponse(
         private val poolMap: ChannelPoolMap<HttpClientPoolKey, ChannelPool>,
         private val scope: CoroutineScope
     ) : ProxyContext {
-        override suspend fun location(
-            prefix: String,
-            regex: String,
-            block: suspend LocationContext.() -> Unit
-        ) {
-            LocationContext(request.uri(), arrayOf()).location(prefix, regex, block);
-        }
 
         override val decoder by lazy { QueryStringDecoder(request.uri()) }
 
@@ -341,7 +334,7 @@ class ProxyHttpRequestResponse(
             log.debug("--> OK $msg END")
         }
 
-        override suspend fun forward(url: String) {
+        override suspend fun forward(url: String, hostHeader: String?) {
             val parser = ProxyRewriteParser(uri = URI(url))
             val poolKey = HttpClientPoolKey(parser.addr, parser.secure)
             val pool = poolMap[poolKey]
@@ -354,7 +347,7 @@ class ProxyHttpRequestResponse(
             }
             HttpUtil.setKeepAlive(request, !shouldCloseClient)
 
-            request.headers().set(HttpHeaderNames.HOST, parser.hostHeader)
+            request.headers().set(HttpHeaderNames.HOST, hostHeader ?: parser.hostHeader)
             request.uri = parser.queryString
 
             log.info("==> $url START")
@@ -408,6 +401,22 @@ class ProxyHttpRequestResponse(
                 pool.release(channel)
             }
         }
+
+        override suspend fun location(
+            prefix: String,
+            regex: String?,
+            host: String?,
+            block: suspend LocationContext.() -> Unit
+        ) {
+            val uri = request.uri()
+
+            val hostHeader = request.headers().get(HttpHeaderNames.HOST)
+            val parser = HostHeaderParser(hostHeader ?: "", config.ssl)
+
+            LocationContext(uri, parser.host, parser.port, config.ssl, arrayOf())
+                .location(prefix, regex, host, block);
+        }
+
 
         override val coroutineContext = scope.coroutineContext
 
