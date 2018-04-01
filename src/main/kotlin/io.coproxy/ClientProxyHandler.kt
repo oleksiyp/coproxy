@@ -9,7 +9,9 @@ import kotlinx.coroutines.experimental.launch
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
-class ClientProxyHandler : SimpleChannelInboundHandler<HttpObject>() {
+class ClientProxyHandler(
+    val config: CoProxyConfig
+) : SimpleChannelInboundHandler<HttpObject>() {
     override fun channelInactive(ctx: ChannelHandlerContext) {
         val reqResponse = ctx.requestResponseNullable ?: return
         ctx.requestResponseNullable = null
@@ -47,12 +49,13 @@ class ClientProxyHandler : SimpleChannelInboundHandler<HttpObject>() {
         val requestResponse = ctx.requestResponseNullable
         if (requestResponse == null) {
             log.error(
-                "Client-side channel {} {}: {}. Bad state",
+                "Client-side channel {} {}: {}. Bad state. Closing connection",
                 ctx.channel().id(),
                 cause::class.java.simpleName,
                 cause.message,
                 cause
             )
+            ctx.channel().halfCloseOutput(config.halfCloseTimeoutMs)
         } else {
             requestResponse.clientExceptionHappened(cause, ctx.channel())
         }

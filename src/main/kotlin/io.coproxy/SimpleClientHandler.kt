@@ -13,9 +13,6 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
 class SimpleClientHandler : SimpleChannelInboundHandler<FullHttpResponse>() {
-    override fun channelInactive(ctx: ChannelHandlerContext?) {
-        super.channelInactive(ctx)
-    }
 
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
         ReferenceCountUtil.retain(msg)

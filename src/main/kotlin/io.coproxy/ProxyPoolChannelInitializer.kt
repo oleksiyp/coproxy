@@ -26,6 +26,8 @@ class ProxyPoolChannelInitializer(
     override fun channelCreated(ch: Channel) {
         log.info("New channel {}", ch.id())
         val p = ch.pipeline()
+
+        p.addLast(ChannelMDCReporter("clientChannel"))
         if (poolKey.ssl) {
             val sslCtx = ch.attr(HttpClient.sslKeyAttribute).get()
             p.addLast(sslCtx.newHandler(ch.alloc()))
@@ -55,7 +57,7 @@ class ProxyPoolChannelInitializer(
                     TimeUnit.MILLISECONDS
                 )
             )
-            p.addLast(ClientProxyHandler())
+            p.addLast(ClientProxyHandler(config))
         }
     }
 

@@ -19,6 +19,8 @@ class ServerProxyChannelInitializer(
 
     public override fun initChannel(ch: SocketChannel) {
         val p = ch.pipeline()
+
+        p.addLast(ChannelMDCReporter("serverChannel"))
         p.addLast(clientAttributeInitializer)
         config.trafficLogging?.let { p.addLast(LoggingHandler(it)) }
         sslCtx?.let { p.addLast(it.newHandler(ch.alloc())) }

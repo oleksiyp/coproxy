@@ -23,23 +23,18 @@ class HttpClientAttributeInitializer(
     }
 
     private fun getOrCreateClient(eventLoop: EventLoop): HttpClient? {
-        var client = clients[eventLoop]
-        if (client == null) {
-            client = HttpClient(eventLoop, sslCtx, clientConfig)
-            clients[eventLoop] = client
-        } else {
-            client.retain()
+        val client = clients[eventLoop]
+        if (client != null) {
+            return client
         }
-        return client
+
+        val newClient = HttpClient(eventLoop, sslCtx, clientConfig)
+        clients[eventLoop] = newClient
+        return newClient
     }
 
     override fun channelUnregistered(ctx: ChannelHandlerContext) {
         super.channelUnregistered(ctx)
-        val client = ctx.channel().attr(HttpClient.attributeKey).getAndSet(null)
-        synchronized(clients) {
-            if (client.release()) {
-                clients.remove(ctx.channel().eventLoop())
-            }
-        }
+        ctx.channel().attr(HttpClient.attributeKey).set(null)
     }
 }

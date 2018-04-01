@@ -8,11 +8,17 @@ import io.netty.channel.pool.ChannelPool
 import io.netty.channel.pool.ChannelPoolMap
 import io.netty.handler.codec.http.*
 import io.netty.util.AttributeKey
+import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.experimental.*
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import java.net.URI
 import java.util.*
 import java.util.concurrent.TimeoutException
+import kotlin.coroutines.experimental.AbstractCoroutineContextElement
+import kotlin.coroutines.experimental.Continuation
+import kotlin.coroutines.experimental.ContinuationInterceptor
+import kotlin.coroutines.experimental.CoroutineContext
 
 class ProxyHttpRequestResponse(
     val config: CoProxyConfig,
@@ -32,13 +38,35 @@ class ProxyHttpRequestResponse(
     var responseStarted = false
     var responseSent = false
 
-    val coroutineContext = server.eventLoop().asCoroutineDispatcher() + CoroutineName(idGen.next())
+    inner class ChannelMDCInterceptor : AbstractCoroutineContextElement(ContinuationInterceptor),
+        ContinuationInterceptor {
+        override fun <T> interceptContinuation(continuation: Continuation<T>): Continuation<T> {
+            MDC.remove("serverChannel")
+            return object : Continuation<T> {
+                override val context: CoroutineContext
+                    get() = continuation.context
+
+                override fun resume(value: T) {
+                    MDC.put("serverChannel", server.id().toString())
+                    continuation.resume(value)
+                }
+
+                override fun resumeWithException(exception: Throwable) {
+                    MDC.put("serverChannel", server.id().toString())
+                    continuation.resumeWithException(exception)
+                }
+            }
+        }
+    }
+
+    val coroutineContext = server.eventLoop().asCoroutineDispatcher() +
+            CoroutineName(idGen.next()) +
+            ChannelMDCInterceptor()
 
     private var clientHandler: RequestResponseHandler? = null
 
     companion object {
-        val attributeKey =
-            AttributeKey.newInstance<ProxyHttpRequestResponse>("requestResponse")
+        val attributeKey = AttributeKey.newInstance<ProxyHttpRequestResponse>("requestResponse")
         val log = LoggerFactory.getLogger(ProxyHttpRequestResponse::class.java)
     }
 
@@ -105,6 +133,7 @@ class ProxyHttpRequestResponse(
         handler: CoProxyHandler
     ) {
         flowControl()
+
         handlerJob = launch(coroutineContext) {
             try {
                 val context = ProxyContextImpl(request, poolMap, this)
@@ -119,6 +148,8 @@ class ProxyHttpRequestResponse(
                 }
             } catch (ex: Throwable) {
                 server.write(ex)
+            } finally {
+                ReferenceCountUtil.release(request)
             }
         }
     }
@@ -210,10 +241,14 @@ class ProxyHttpRequestResponse(
                         ""
                     )
 
-            become(
-                SkipHttpHandler(server, this@ProxyHttpRequestResponse),
-                fakeRequest
-            )
+            try {
+                become(
+                    SkipHttpHandler(server, this@ProxyHttpRequestResponse),
+                    fakeRequest
+                )
+            } finally {
+                fakeRequest?.release()
+            }
         }
     }
 
@@ -287,7 +322,10 @@ class ProxyHttpRequestResponse(
 
         flowControl()
 
-        request?.let { handler.sendClient(it) }
+        request?.let {
+            ReferenceCountUtil.retain(it)
+            handler.sendClient(it)
+        }
         handler.flushClient()
 
         drainClientQueue(handler)
@@ -302,7 +340,13 @@ class ProxyHttpRequestResponse(
         private val scope: CoroutineScope
     ) : ProxyContext {
 
-        override val decoder by lazy { QueryStringDecoder(request.uri()) }
+        override val decoder by lazy {
+            QueryStringDecoder(request.uri())
+        }
+
+        override val encodedUri: String by lazy {
+            decoder.uri()
+        }
 
         override suspend fun replyOk(msg: String, contentType: String) {
             val buffer = alloc.buffer()

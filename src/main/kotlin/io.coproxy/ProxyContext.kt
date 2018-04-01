@@ -9,6 +9,8 @@ interface ProxyContext : CoroutineScope {
 
     val decoder: QueryStringDecoder
 
+    val encodedUri: String
+
     val job: Job
 
     suspend fun forward(url: String, hostHeader: String? = null)

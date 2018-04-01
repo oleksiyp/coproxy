@@ -5,6 +5,7 @@ import io.netty.channel.Channel
 import io.netty.channel.ChannelOption
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
+import io.netty.handler.ssl.SslProvider
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.handler.ssl.util.SelfSignedCertificate
 import io.netty.util.concurrent.DefaultThreadFactory
@@ -17,10 +18,14 @@ class CoProxy(
     val config: CoProxyConfig = CoProxyConfig(trafficLogging = null),
     val handler: CoProxyHandler
 ) {
-    private val serverGroup = config.eventLoopGroup(config.selectorThreads,
-        DefaultThreadFactory("selector:" + config.port))
-    private val serverWorkerGroup = config.eventLoopGroup(config.serverThreads,
-        DefaultThreadFactory("worker:" + config.port))
+    private val serverGroup = config.eventLoopGroup(
+        config.selectorThreads,
+        DefaultThreadFactory("selector:" + config.port)
+    )
+    private val serverWorkerGroup = config.eventLoopGroup(
+        config.serverThreads,
+        DefaultThreadFactory("worker:" + config.port)
+    )
 
     private val sslCtx: SslContext? = configureSSL()
     private val clientSslCtx = configureClientSSL()
@@ -49,7 +54,9 @@ class CoProxy(
 
     private fun configureClientSSL(): SslContext {
         return SslContextBuilder.forClient()
-            .trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+            .sslProvider(SslProvider.OPENSSL)
+            .trustManager(InsecureTrustManagerFactory.INSTANCE)
+            .build()
     }
 
 
@@ -58,7 +65,10 @@ class CoProxy(
             return null
         }
         val ssc = SelfSignedCertificate()
-        return SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build()
+        return SslContextBuilder
+            .forServer(ssc.certificate(), ssc.privateKey())
+            .sslProvider(SslProvider.OPENSSL)
+            .build()
     }
 
     private fun createServerBootstrap(): ServerBootstrap {

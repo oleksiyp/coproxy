@@ -26,6 +26,7 @@ class ServerProxyHandler(
     }
 
     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpObject) {
+        ReferenceCountUtil.retain(msg)
         if (msg is HttpRequest) {
             if (!canHandleNextRequest(ctx)) {
                 ctx.requestResponse.serverExceptionHappened(
@@ -42,7 +43,6 @@ class ServerProxyHandler(
             val newReqResp = ProxyHttpRequestResponse(config, ctx.channel(), ctx.alloc(), idGen)
             ctx.requestResponse = newReqResp
 
-            ReferenceCountUtil.retain(msg)
             newReqResp.processRequest(msg, client.poolMap, handler)
         } else {
             ctx.requestResponse.sendClient(msg)
@@ -70,7 +70,8 @@ class ServerProxyHandler(
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         val requestResponse = ctx.requestResponseNullable
         if (requestResponse == null) {
-            log.error("Server-side channel error. Bad state", cause)
+            log.error("Server-side channel error. Bad state. Closing connection", cause)
+            ctx.channel().halfCloseOutput(config.halfCloseTimeoutMs)
         } else {
             requestResponse.serverExceptionHappened(cause)
         }

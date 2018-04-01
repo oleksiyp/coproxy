@@ -26,7 +26,7 @@ fun main(args: Array<String>) {
         val schema = if (ssl) "https" else "http"
         val defaultPort = if (ssl) 443 else 80
         val portSuffix = if (port != defaultPort) ":$port" else ""
-        val url = "$schema://$ip$portSuffix${request.uri()}"
+        val url = "$schema://$ip$portSuffix${encodedUri}"
         return Pair(host, url)
     }
 
